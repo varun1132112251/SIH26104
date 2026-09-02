@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  # Backend API service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - API_PORT=8000
+      - API_HOST=0.0.0.0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MODEL_PATH=${MODEL_PATH:-}
+      - AUDIO_SAMPLE_RATE=${AUDIO_SAMPLE_RATE:-16000}
+    volumes:
+      - ./backend:/app/backend
+      - ./ml:/app/ml
+    command: python -m backend.app.main
+    networks:
+      - sih26104-network
+    depends_on:
+      - redis
+
+  # Redis for caching and temporary data
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - sih26104-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # (Future) PostgreSQL for persistent storage
+  # db:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_DB: voice_detection
+  #     POSTGRES_USER: ${DB_USER:-postgres}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - sih26104-network
+
+networks:
+  sih26104-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
