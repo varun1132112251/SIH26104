@@ -1,17 +1,13 @@
 """AASIST-L inference wrapper for speech anti-spoofing.
 
-The model is the lightweight AASIST countermeasure published by the
-SpeechAntiSpoofingBenchmarks project and trained on ASVspoof 2019 LA. The
-ONNX checkpoint is downloaded on first use instead of being committed to Git.
-
-AASIST-L expects mono float32 speech at 16 kHz and a deterministic 64,600
-sample evaluation window. Its output is converted to a spoof probability,
-where 0 means bona fide and 1 means spoof/synthetic.
+AASIST-L is a lightweight AASIST countermeasure published by the
+SpeechAntiSpoofingBenchmarks project and based on the ASVspoof 2019 LA
+pretrained checkpoint. The model is downloaded on first use instead of being
+committed to Git.
 """
 
 from __future__ import annotations
 
-import hashlib
 import urllib.request
 from pathlib import Path
 from typing import Optional
@@ -20,13 +16,13 @@ import numpy as np
 
 try:
     import onnxruntime as ort
-except ImportError:  # pragma: no cover - exercised only without optional dependency
+except ImportError:  # pragma: no cover - optional dependency
     ort = None
 
 
 MODEL_URL = (
     "https://huggingface.co/SpeechAntiSpoofingBenchmarks/AASIST-L/"
-    "resolve/main/aasist-l.onnx"
+    "resolve/e4185b270ec20077c918e06a45093717a1bd5e30/aasist-l.onnx"
 )
 MODEL_SAMPLES = 64_600
 SAMPLE_RATE = 16_000
@@ -54,7 +50,7 @@ def _softmax(logits: np.ndarray) -> np.ndarray:
 
 
 class AASISTL:
-    """Lightweight ONNXRuntime wrapper around the AASIST-L detector."""
+    """ONNX Runtime wrapper around the lightweight AASIST-L detector."""
 
     name = "AASIST-L"
     expected_sample_rate = SAMPLE_RATE
@@ -63,7 +59,6 @@ class AASISTL:
         self.model_path = Path(model_path) if model_path else Path("models_cache/aasist-l.onnx")
         self.session = None
         self.input_name: Optional[str] = None
-        self.output_name: Optional[str] = None
 
     def _download_model(self) -> None:
         self.model_path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,9 +69,7 @@ class AASISTL:
         except Exception as exc:
             if tmp_path.exists():
                 tmp_path.unlink()
-            raise AASISTModelError(
-                f"Unable to download AASIST-L model from {MODEL_URL}: {exc}"
-            ) from exc
+            raise AASISTModelError(f"Unable to download AASIST-L model: {exc}") from exc
 
     def load(self) -> None:
         """Load the ONNX model, downloading it once when necessary."""
@@ -91,11 +84,9 @@ class AASISTL:
                 str(self.model_path), providers=["CPUExecutionProvider"]
             )
             inputs = self.session.get_inputs()
-            outputs = self.session.get_outputs()
-            if not inputs or not outputs:
-                raise AASISTModelError("AASIST-L ONNX graph has no usable input/output tensors.")
+            if not inputs:
+                raise AASISTModelError("AASIST-L ONNX graph has no input tensor.")
             self.input_name = inputs[0].name
-            self.output_name = outputs[0].name
         except Exception as exc:
             raise AASISTModelError(f"Could not load AASIST-L ONNX model: {exc}") from exc
 
@@ -104,27 +95,25 @@ class AASISTL:
             self.load()
 
     def score_batch(self, audios: list[np.ndarray]) -> list[float]:
-        """Return spoof probabilities for a batch of 16 kHz mono waveforms."""
+        """Return spoof probabilities for 16 kHz mono waveforms.
+
+        AASIST-L exposes two logits: class 0 = spoof and class 1 = bona fide.
+        The returned value is therefore P(spoof).
+        """
+        if not audios:
+            return []
         self._ensure_loaded()
         assert self.session is not None
         assert self.input_name is not None
 
         batch = np.stack([_pad_fixed(audio) for audio in audios]).astype(np.float32)
         outputs = self.session.run(None, {self.input_name: batch})
-        raw = np.asarray(outputs[0])
+        logits = np.asarray(outputs[0])
+        if logits.ndim != 2 or logits.shape[1] != 2:
+            raise AASISTModelError(f"Unexpected model output shape: {logits.shape}")
 
-        if raw.ndim == 2 and raw.shape[1] == 2:
-            # AASIST convention: class 1 is bona fide. Therefore spoof is
-            # the probability of class 0.
-            probabilities = _softmax(raw)
-            spoof = probabilities[:, 0]
-        elif raw.ndim == 1:
-            # Some exported graphs expose the bona-fide logit directly.
-            spoof = 1.0 / (1.0 + np.exp(np.clip(raw, -60.0, 60.0)))
-        else:
-            raise AASISTModelError(f"Unexpected model output shape: {raw.shape}")
-
-        return [float(np.clip(value, 0.0, 1.0)) for value in spoof]
+        probabilities = _softmax(logits)
+        return [float(np.clip(value, 0.0, 1.0)) for value in probabilities[:, 0]]
 
     def score(self, audio: np.ndarray) -> float:
         """Return spoof probability for one waveform."""
@@ -134,7 +123,6 @@ class AASISTL:
         """Release the ONNX session."""
         self.session = None
         self.input_name = None
-        self.output_name = None
 
 
 __all__ = ["AASISTL", "AASISTModelError", "MODEL_SAMPLES", "SAMPLE_RATE"]
