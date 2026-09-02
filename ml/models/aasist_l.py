@@ -1,13 +1,4 @@
-"""AASIST-L inference wrapper for speech anti-spoofing.
-
-AASIST-L is the lightweight AASIST countermeasure published by the
-SpeechAntiSpoofingBenchmarks project. The official repository provides a
-self-contained ONNX checkpoint trained on ASVspoof 2019 LA.
-
-The checkpoint is downloaded through huggingface_hub on first use rather than
-committed to Git. The official wrapper uses a deterministic first 64,600-sample
-window at 16 kHz and returns a bona-fide score (higher means more bona fide).
-"""
+"""AASIST-L inference wrapper for speech anti-spoofing."""
 
 from __future__ import annotations
 
@@ -28,7 +19,9 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 HF_REPO_ID = "SpeechAntiSpoofingBenchmarks/AASIST-L"
-HF_REVISION = "e4185b270ec20077c918e06a45093717a1bd5e30"
+# The ONNX artifact was added in this revision; the earlier e4185b2 revision
+# contains the PyTorch checkpoint but does not contain aasist-l.onnx.
+HF_REVISION = "2bc4bf063f34f081cafa5d51c2e72bbfa5d39715"
 HF_FILENAME = "aasist-l.onnx"
 MODEL_SAMPLES = 64_600
 SAMPLE_RATE = 16_000
@@ -71,7 +64,6 @@ class AASISTL:
                 filename=HF_FILENAME,
                 revision=HF_REVISION,
                 local_dir="models_cache",
-                local_dir_use_symlinks=False,
             )
             return Path(downloaded)
         except Exception as exc:
@@ -105,11 +97,10 @@ class AASISTL:
             self.load()
 
     def score_batch(self, audios: list[np.ndarray]) -> list[float]:
-        """Return the model's bona-fide scores for 16 kHz mono waveforms.
+        """Return bona-fide scores for 16 kHz mono waveforms.
 
         Higher values indicate more bona fide speech according to the official
-        AASIST-L model card. The SIH risk engine will invert/calibrate this
-        score later rather than pretending it is already a probability.
+        AASIST-L model card. The SIH risk engine will calibrate this score later.
         """
         if not audios:
             return []
