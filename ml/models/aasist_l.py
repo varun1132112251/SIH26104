@@ -19,8 +19,6 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 HF_REPO_ID = "SpeechAntiSpoofingBenchmarks/AASIST-L"
-# The ONNX artifact was added in this revision; the earlier e4185b2 revision
-# contains the PyTorch checkpoint but does not contain aasist-l.onnx.
 HF_REVISION = "2bc4bf063f34f081cafa5d51c2e72bbfa5d39715"
 HF_FILENAME = "aasist-l.onnx"
 MODEL_SAMPLES = 64_600
@@ -97,10 +95,11 @@ class AASISTL:
             self.load()
 
     def score_batch(self, audios: list[np.ndarray]) -> list[float]:
-        """Return bona-fide scores for 16 kHz mono waveforms.
+        """Return the AASIST-L bona-fide logit for each 16 kHz mono waveform.
 
-        Higher values indicate more bona fide speech according to the official
-        AASIST-L model card. The SIH risk engine will calibrate this score later.
+        The exported ONNX graph returns two logits: class 0 is spoof and class 1
+        is bona fide. The official model card defines the bona-fide logit as the
+        Arena score, where higher values indicate more bona-fide speech.
         """
         if not audios:
             return []
@@ -110,15 +109,19 @@ class AASISTL:
 
         batch = np.stack([_pad_fixed(audio) for audio in audios]).astype(np.float32)
         outputs = self.session.run(None, {self.input_name: batch})
-        scores = np.asarray(outputs[0]).reshape(-1)
-        if scores.shape[0] != len(audios):
-            raise AASISTModelError(
-                f"Unexpected model output shape: {np.asarray(outputs[0]).shape}"
-            )
+        raw = np.asarray(outputs[0])
+
+        if raw.ndim == 2 and raw.shape[1] == 2:
+            scores = raw[:, 1]
+        elif raw.ndim == 1 and raw.shape[0] == len(audios):
+            scores = raw
+        else:
+            raise AASISTModelError(f"Unexpected model output shape: {raw.shape}")
+
         return [float(value) for value in scores]
 
     def score(self, audio: np.ndarray) -> float:
-        """Return the bona-fide score for one waveform."""
+        """Return the bona-fide logit for one waveform."""
         return self.score_batch([audio])[0]
 
     def unload(self) -> None:
