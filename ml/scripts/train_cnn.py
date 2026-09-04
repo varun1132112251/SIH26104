@@ -170,6 +170,7 @@ def train(args: argparse.Namespace) -> Path:
                 {
                     "model_state_dict": model.state_dict(),
                     "epoch": epoch,
+                    "train_loss": train_loss,
                     "validation_loss": validation_loss,
                     "validation_metrics": metrics,
                     "class_weights": weights.tolist() if weights is not None else None,
