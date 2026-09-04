@@ -68,6 +68,13 @@ data/samples/*
 
 # ASVspoof 5 dataset
 data/asvspoof5/
+ASVspoof5/
+**/ASVspoof5/
+**/flac_T/
+**/flac_D/
+**/*features_cache*/
+*.tar
+*.tar.*
 
 # Logs
 logs/

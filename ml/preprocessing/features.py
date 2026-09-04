@@ -11,17 +11,18 @@ import numpy as np
 class MelSpectrogramExtractor:
 	"""Extract log-Mel spectrograms from 16 kHz mono float32 audio."""
 
-	sample_rate = 16_000
-
 	def __init__(
 		self,
 		*,
+		sample_rate: int = 16_000,
 		n_fft: int = 1024,
 		hop_length: int = 256,
 		n_mels: int = 80,
 		fmin: float = 20.0,
-		fmax: float = 7600.0,
+		fmax: float | None = None,
 	) -> None:
+		if sample_rate <= 0:
+			raise ValueError("sample_rate must be positive.")
 		if n_fft <= 0:
 			raise ValueError("n_fft must be positive.")
 		if hop_length <= 0:
@@ -30,14 +31,22 @@ class MelSpectrogramExtractor:
 			raise ValueError("n_mels must be positive.")
 		if fmin < 0:
 			raise ValueError("fmin must be non-negative.")
-		if fmax <= fmin or fmax > self.sample_rate / 2:
+		resolved_fmax = min(7600.0, sample_rate / 2) if fmax is None else fmax
+		if resolved_fmax <= fmin or resolved_fmax > sample_rate / 2:
 			raise ValueError("fmax must be greater than fmin and no greater than Nyquist.")
 
+		self.sample_rate = sample_rate
 		self.n_fft = n_fft
 		self.hop_length = hop_length
 		self.n_mels = n_mels
 		self.fmin = fmin
-		self.fmax = fmax
+		self.fmax = resolved_fmax
+
+	def expected_frames(self, sample_count: int) -> int:
+		"""Return the deterministic frame count for a fixed waveform length."""
+		if sample_count <= 0:
+			raise ValueError("sample_count must be positive.")
+		return 1 + sample_count // self.hop_length
 
 	@staticmethod
 	def _validate_audio(audio: np.ndarray) -> np.ndarray:
