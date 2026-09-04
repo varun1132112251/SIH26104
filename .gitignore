@@ -66,6 +66,9 @@ data/processed/*
 data/samples/*
 !data/samples/.gitkeep
 
+# ASVspoof 5 dataset
+data/asvspoof5/
+
 # Logs
 logs/
 *.log
