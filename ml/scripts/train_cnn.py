@@ -12,6 +12,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, Subset
 
 from ml.datasets.asvspoof5_features import ASVspoof5FeatureDataset
+from ml.datasets.splits import split_asvspoof5, split_id_sets
 from ml.models.audio_cnn import AudioCNN
 
 
@@ -131,8 +132,15 @@ def train(args: argparse.Namespace) -> Path:
     if args.audio_root is not None:
         dataset_kwargs["audio_root"] = args.audio_root
     dataset = ASVspoof5FeatureDataset(**dataset_kwargs)
-    train_dataset, validation_dataset = _split_dataset(dataset, args.validation_fraction, args.seed)
-    train_indices = list(train_dataset.indices)
+    split = split_asvspoof5(
+        dataset,
+        validation_fraction=args.validation_fraction,
+        test_fraction=args.test_fraction,
+        seed=args.seed,
+        audio_only=args.audio_only,
+    )
+    train_dataset, validation_dataset, _ = split.datasets(dataset)
+    train_indices = list(split.train)
     loader_kwargs = {"num_workers": args.num_workers, "pin_memory": device.type == "cuda"}
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, **loader_kwargs)
     validation_loader = DataLoader(validation_dataset, batch_size=args.batch_size, **loader_kwargs)
@@ -177,6 +185,32 @@ def train(args: argparse.Namespace) -> Path:
                     "seed": args.seed,
                     "input_shape": AudioCNN.input_shape,
                     "class_mapping": {"bonafide": 0, "spoof": 1},
+                    "dataset": {
+                        "metadata_path": str(dataset.metadata_path),
+                        "audio_root": str(dataset.audio_root),
+                        "max_samples": args.max_samples,
+                        "audio_only": args.audio_only,
+                    },
+                    "split": {
+                        "seed": split.seed,
+                        "validation_fraction": split.validation_fraction,
+                        "test_fraction": split.test_fraction,
+                        "sizes": {
+                            "train": len(split.train),
+                            "validation": len(split.validation),
+                            "test": len(split.test),
+                        },
+                        "utterance_ids": {
+                            name: sorted(ids) for name, ids in split_id_sets(dataset, split).items()
+                        },
+                    },
+                    "training": {
+                        "batch_size": args.batch_size,
+                        "epochs": args.epochs,
+                        "learning_rate": args.learning_rate,
+                        "num_workers": args.num_workers,
+                        "class_balance": args.class_balance,
+                    },
                 },
                 checkpoint_path,
             )
@@ -191,6 +225,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--audio-root", type=Path, default=None, help="Directory containing FLAC files")
     parser.add_argument("--max-samples", type=int, default=None, help="Limit samples for smoke testing")
     parser.add_argument("--validation-fraction", type=float, default=0.2)
+    parser.add_argument("--test-fraction", type=float, default=0.15)
+    parser.add_argument(
+        "--audio-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include only protocol records whose local audio file exists.",
+    )
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--epochs", type=int, default=10)

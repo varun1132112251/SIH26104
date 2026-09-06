@@ -114,7 +114,7 @@ class CNNInference:
         return CNNInferenceResult(
             spoof_probability=spoof_probability,
             bonafide_probability=bonafide_probability,
-            decision="SPOOF" if spoof_probability >= 0.5 else "BONAFIDE",
+            decision="SPOOF" if spoof_probability >= 0.7404227 else "BONAFIDE",
             risk_score=spoof_probability,
         )
 
