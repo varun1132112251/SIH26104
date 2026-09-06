@@ -94,6 +94,23 @@ This project develops a comprehensive system to:
 - [x] Docker Compose setup
 - [x] Dependency management
 
+### M4: ASVspoof5 data pipeline
+
+The M4 pipeline reads `ASVspoof5.train.tsv` lazily: field 1 is mapped from
+`T_XXXXXXXXXX` to `<audio-root>/T_XXXXXXXXXX.flac`, and field 8 is encoded as
+bonafide `0` or spoof `1`. The index reports protocol, present, missing, and
+class counts without copying dataset files into the repository. At access time,
+`AudioPreprocessor` converts audio to mono, resamples it to the configured
+sample rate, normalizes it, and crops or pads a fixed-duration segment.
+`MelSpectrogramExtractor` then produces a deterministic log-Mel tensor for the
+PyTorch `Dataset` and `DataLoader` (default shape `(batch, 1, 80, 126)`).
+
+Run a bounded smoke test with the local dataset:
+
+```bash
+python -m ml.scripts.smoke_asvspoof5 --metadata C:\Users\Administrator\Downloads\ASVspoof5\protocols\ASVspoof5.train.tsv --audio-root C:\Users\Administrator\Downloads\ASVspoof5\flac_T --max-samples 500
+```
+
 ### 🚧 In Progress / TODO
 
 #### Phase 1: ML Foundation
