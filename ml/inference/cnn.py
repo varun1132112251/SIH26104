@@ -14,6 +14,8 @@ from ml.models.audio_cnn import AudioCNN
 from ml.preprocessing.audio import AudioProcessingError, AudioPreprocessor
 from ml.preprocessing.features import MelSpectrogramExtractor
 
+DEFAULT_THRESHOLD = 0.7404227
+
 
 class CNNInferenceError(RuntimeError):
     """Raised when a CNN checkpoint or audio input cannot be used for inference."""
@@ -114,7 +116,7 @@ class CNNInference:
         return CNNInferenceResult(
             spoof_probability=spoof_probability,
             bonafide_probability=bonafide_probability,
-            decision="SPOOF" if spoof_probability >= 0.7404227 else "BONAFIDE",
+            decision="SPOOF" if spoof_probability >= DEFAULT_THRESHOLD  else "BONAFIDE",
             risk_score=spoof_probability,
         )
 
