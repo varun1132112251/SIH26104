@@ -130,6 +130,23 @@ async def test_inference_endpoint_remains_a_predict_alias(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_predict_endpoint_allows_vite_development_origin():
+    transport = httpx.ASGITransport(app=main.create_app())
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.options(
+            "/api/v1/predict",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+@pytest.mark.asyncio
 async def test_real_asvspoof5_audio_inference_smoke():
     audio_path = Path(os.getenv("ASVSPOOF5_SMOKE_AUDIO", ""))
     checkpoint_path = Path(os.getenv("MODEL_PATH", ""))

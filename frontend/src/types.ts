@@ -11,4 +11,8 @@ export interface DetectionResult {
   recommendation: string
   analyzedAt: string
   isMock: boolean
+  model?: string
+  spoofProbability?: number
+  bonafideProbability?: number
+  riskScore?: number
 }

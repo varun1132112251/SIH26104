@@ -2,7 +2,8 @@ import { ChangeEvent, DragEvent, useEffect, useRef, useState } from 'react'
 import { analyzeAudio, apiConfig } from './services/api'
 import type { DetectionResult, RiskLevel } from './types'
 
-const ACCEPTED_AUDIO = 'audio/*,.wav,.mp3,.m4a,.ogg,.webm'
+const ACCEPTED_AUDIO = '.wav,.flac,.ogg,.aiff,.aif'
+const SUPPORTED_AUDIO_PATTERN = /\.(wav|flac|ogg|aiff|aif)$/i
 const initialHistory: DetectionResult[] = []
 
 const riskMeta: Record<RiskLevel, { label: string; className: string }> = {
@@ -67,8 +68,8 @@ function App() {
   }
 
   function acceptFile(file: File) {
-    if (!file.type.startsWith('audio/') && !/\.(wav|mp3|m4a|ogg|webm)$/i.test(file.name)) {
-      setError('This file is not a supported audio format. Choose WAV, MP3, M4A, OGG, or WebM audio.')
+    if (!SUPPORTED_AUDIO_PATTERN.test(file.name)) {
+      setError('Unsupported audio format. Choose WAV, FLAC, OGG, AIFF, or AIF audio.')
       return
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -133,6 +134,10 @@ function App() {
 
   async function startAnalysis() {
     if (!activeFile || isAnalyzing) return
+    if (!SUPPORTED_AUDIO_PATTERN.test(activeFile.name)) {
+      setError('Live recordings are saved as WebM by this browser. Convert the recording to WAV, FLAC, OGG, AIFF, or AIF before analysis.')
+      return
+    }
     setIsAnalyzing(true)
     setError('')
     setResult(null)
@@ -183,7 +188,7 @@ function App() {
         <section className="hero-strip">
           <div><p className="eyebrow accent">AI VOICE DEEPFAKE DETECTION</p><h2>Verify the voice<br /><em>before the decision.</em></h2><p className="hero-copy">Analyze audio signals for synthetic speech and surface the risk context your team needs to act with confidence.</p></div>
           <div className="hero-orbit" aria-hidden="true"><div className="orbit-ring ring-one" /><div className="orbit-ring ring-two" /><div className="orbit-core"><span>V</span></div><div className="orbit-scan" /></div>
-          <div className="hero-stat"><span>MODEL STATUS</span><strong>Ready for input</strong><small><i /> DEMO MODE / MOCK RESPONSE</small></div>
+          <div className="hero-stat"><span>MODEL STATUS</span><strong>Ready for input</strong><small><i /> {apiConfig.usesMock ? 'DEMO MODE / MOCK RESPONSE' : 'BACKEND API / LIVE RESPONSE'}</small></div>
         </section>
 
         <div className="content-grid">
@@ -191,7 +196,7 @@ function App() {
             <div className="panel-heading"><div><span className="section-number">01</span><div><h3>Audio input</h3><p>Upload a sample or record directly.</p></div></div><span className="live-badge">INPUT READY</span></div>
             <div className={`drop-zone ${isDragging ? 'dragging' : ''} ${activeFile ? 'has-file' : ''}`} onDragOver={(event) => { event.preventDefault(); setIsDragging(true) }} onDragLeave={() => setIsDragging(false)} onDrop={handleDrop} onClick={() => !activeFile && fileInputRef.current?.click()} role="button" tabIndex={0} onKeyDown={(event) => event.key === 'Enter' && fileInputRef.current?.click()}>
               <input ref={fileInputRef} type="file" accept={ACCEPTED_AUDIO} onChange={handleFileChange} hidden />
-              {activeFile ? <><div className="file-icon">♫</div><div className="file-details"><strong>{activeFile.name}</strong><span>{activeFile.type || 'audio/webm'} <i /> Ready for analysis</span></div><button className="icon-button" type="button" aria-label="Remove selected audio" onClick={(event) => { event.stopPropagation(); clearSelectedAudio() }}>×</button></> : <><div className="upload-icon">↑</div><div><strong>Drop an audio file here</strong><p>or <u>browse from your device</u></p><small>WAV, MP3, M4A, OGG, WEBM <i /> Max 30 MB</small></div></>}
+              {activeFile ? <><div className="file-icon">♫</div><div className="file-details"><strong>{activeFile.name}</strong><span>{activeFile.type || 'audio/webm'} <i /> {SUPPORTED_AUDIO_PATTERN.test(activeFile.name) ? 'Ready for analysis' : 'Convert to a supported format before analysis'}</span></div><button className="icon-button" type="button" aria-label="Remove selected audio" onClick={(event) => { event.stopPropagation(); clearSelectedAudio() }}>×</button></> : <><div className="upload-icon">↑</div><div><strong>Drop an audio file here</strong><p>or <u>browse from your device</u></p><small>WAV, FLAC, OGG, AIFF, AIF <i /> Max 30 MB</small></div></>}
             </div>
             {displayUrl && <audio className="audio-player" controls src={displayUrl} />}
             <div className="record-row"><div className={`record-status ${isRecording ? 'recording' : ''}`}><span className="record-dot" />{isRecording ? `Recording 00:${String(recordingSeconds).padStart(2, '0')}` : recordedBlob ? 'Recording captured' : 'Record a live sample'}</div>{isRecording ? <button className="secondary-button stop" type="button" onClick={stopRecording}>Stop recording</button> : <button className="secondary-button" type="button" onClick={startRecording} disabled={isAnalyzing}>Start recording</button>}</div>
