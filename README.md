@@ -1,326 +1,428 @@
-# SIH26104: Voice Cloning Detection System
+# V-SHIELD — Voice Deepfake Detection System
 
-## Project Objective
+> **AI-powered detection of synthetic, cloned, and spoofed speech for safer voice-based interactions.**
 
-**AI-Powered Real-Time Detection and Prevention of Voice Cloning Impersonation Attacks**
+V-SHIELD is a Smart India Hackathon (SIH) prototype that analyzes an uploaded audio sample and estimates whether the speech is **bona-fide human speech** or **synthetic/spoofed speech**. The system combines a React/TypeScript frontend, a FastAPI inference API, audio preprocessing, and a trained PyTorch CNN model.
 
-This project develops a comprehensive system to:
-- **Detect** voice cloning and deepfake audio in real-time
-- **Analyze** audio signals using advanced ML models for anti-spoofing
-- **Score** risk levels contextually (who, when, where, content)
-- **Prevent** impersonation attacks through secondary verification
-- **Respond** with appropriate security measures
+## 🎯 Problem
 
-## System Architecture
+Voice cloning and synthetic speech can be used to impersonate people and support social-engineering or fraud attempts. V-SHIELD provides a prototype detection layer that helps users avoid relying on a suspicious voice alone.
 
-### High-Level Components
+The current workflow supports:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Frontend (React)                         │
-│  - User interface for audio submission/monitoring           │
-│  - Risk visualization and alerts                            │
-│  - Secondary verification challenges                        │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────────┐
-│               Backend API (FastAPI)                         │
-│  - Audio intake and validation                              │
-│  - Request routing and rate limiting                        │
-│  - Risk scoring and decision logic                          │
-│  - Secondary verification coordination                      │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────────┐
-│             ML Inference Engine                             │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  Audio Preprocessing                                   │ │
-│  │  - Format normalization, resampling                    │ │
-│  │  - Feature extraction (MFCC, spectral)                 │ │
-│  └────────────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  Anti-Spoofing Model                                   │ │
-│  │  - Speaker verification and liveness detection         │ │
-│  │  - Deepfake/synthesis detection                        │ │
-│  │  - Confidence scores and feature importance            │ │
-│  └────────────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  Real-Time Inference                                   │ │
-│  │  - Streaming audio processing                          │ │
-│  │  - Batch inference with caching                        │ │
-│  │  - Model versioning and A/B testing                    │ │
-│  └────────────────────────────────────────────────────────┘ │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────────┐
-│         Risk Scoring & Context Engine                       │
-│  - Rolling risk assessment (temporal analysis)              │
-│  - Contextual factors (caller ID, caller history, etc.)     │
-│  - Threat level classification                              │
-│  - Prevention recommendations                               │
-└─────────────────────────────────────────────────────────────┘
-```
+- Uploading an audio sample from a browser
+- Audio validation and preprocessing
+- Anti-spoofing CNN inference
+- Spoof and bona-fide probabilities
+- Risk scoring and classification
+- Clear user-facing recommendations for additional verification
 
-### Microservices
+> **Prototype scope:** V-SHIELD currently focuses on single-audio-sample analysis. It is not a production-grade identity verification, forensic, or fraud-prevention system.
 
-1. **backend/app/** - FastAPI application
-   - `api/` - REST endpoint handlers
-   - `core/` - Configuration and shared utilities
-   - `models/` - Pydantic schemas
-   - `services/` - Business logic
+## ✨ Key Features
 
-2. **ml/** - Machine learning pipeline
-   - `preprocessing/` - Audio format normalization, resampling, segmentation, and validation
-   - `datasets/` - Generic audio sample abstraction and dataset-specific parsing hooks
-   - `models/` - Model definitions and loading (not implemented yet)
-   - `inference/` - Real-time inference engine (not implemented yet)
-   - `evaluation/` - Benchmarking and validation (not implemented yet)
+### Audio Analysis
+- WAV, FLAC, OGG, AIFF, and AIF input support in the current API
+- Mono conversion, resampling, normalization, and fixed-duration segmentation
+- Log-Mel spectrogram feature extraction
 
-3. **frontend/** - React/TypeScript UI (TODO)
+### Machine Learning
+- PyTorch-based convolutional neural network (CNN)
+- Spoof and bona-fide probabilities
+- Configurable decision threshold
+- Risk score derived from spoof probability
+- Inference service reuses the loaded model within the application process
 
-4. **data/** - Dataset and model artifact storage
-   - `raw/` - Original audio samples
-   - `processed/` - Preprocessed features
-   - `samples/` - Test/demo samples
+### Web Application
+- React + TypeScript + Vite frontend
+- Browser audio upload interface
+- Browser recording interface
+- Detection status and result visualization
+- Confidence and risk-level presentation
+- Secondary-verification recommendation for suspicious results
 
-## Current Status
+### Backend API
+- FastAPI REST API
+- `GET /health` health check
+- `POST /api/v1/predict` audio detection endpoint
+- Temporary upload handling with cleanup after inference
+- Docker-based deployment
 
-### ✅ Completed
-- [x] Project repository structure
-- [x] Python package scaffolding
-- [x] Backend framework setup (FastAPI)
-- [x] Configuration management
-- [x] Test infrastructure (pytest)
-- [x] Docker Compose setup
-- [x] Dependency management
+## 🏗️ System Architecture
 
-### M4: ASVspoof5 data pipeline
-
-The M4 pipeline reads `ASVspoof5.train.tsv` lazily: field 1 is mapped from
-`T_XXXXXXXXXX` to `<audio-root>/T_XXXXXXXXXX.flac`, and field 8 is encoded as
-bonafide `0` or spoof `1`. The index reports protocol, present, missing, and
-class counts without copying dataset files into the repository. At access time,
-`AudioPreprocessor` converts audio to mono, resamples it to the configured
-sample rate, normalizes it, and crops or pads a fixed-duration segment.
-`MelSpectrogramExtractor` then produces a deterministic log-Mel tensor for the
-PyTorch `Dataset` and `DataLoader` (default shape `(batch, 1, 80, 126)`).
-
-Run a bounded smoke test with the local dataset:
-
-```bash
-python -m ml.scripts.smoke_asvspoof5 --metadata C:\Users\Administrator\Downloads\ASVspoof5\protocols\ASVspoof5.train.tsv --audio-root C:\Users\Administrator\Downloads\ASVspoof5\flac_T --max-samples 500
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                         V-SHIELD                              │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  React + TypeScript Frontend                                 │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ Audio upload / recording                               │  │
+│  │ Detection status                                       │  │
+│  │ Classification • confidence • risk • recommendation   │  │
+│  └───────────────────────┬────────────────────────────────┘  │
+│                          │ HTTP multipart/form-data           │
+│                          ▼                                   │
+│  FastAPI Backend                                             │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ /health                                                │  │
+│  │ /api/v1/predict                                        │  │
+│  │ Validation • temporary file handling • response       │  │
+│  └───────────────────────┬────────────────────────────────┘  │
+│                          │                                   │
+│                          ▼                                   │
+│  ML Inference Pipeline                                       │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ Audio preprocessing → Log-Mel → PyTorch CNN            │  │
+│  │                         ↓                              │  │
+│  │              probabilities + risk score                │  │
+│  └───────────────────────┬────────────────────────────────┘  │
+│                          ▼                                   │
+│                   Detection Result                          │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### 🚧 In Progress / TODO
+## 🧠 Machine Learning Pipeline
 
-#### Phase 1: ML Foundation
-- [x] Audio preprocessing pipeline foundation (format normalization, resampling, segmentation, and safe handling of edge cases)
-- [x] Dataset abstraction foundation for audio samples and labels (generic interface + spoof dataset adapter placeholder)
-- [ ] Model evaluation framework
-- [ ] Baseline model selection/integration
-
-> The current implementation covers the preprocessing and data-layer foundation only. The actual anti-spoofing model and dataset integration for ASVspoof or other corpora are not implemented yet.
-
-#### Phase 2: Inference Engine
-- [ ] Real-time audio streaming ingestion
-- [ ] Batch inference optimization
-- [ ] Model caching and versioning
-- [ ] Inference API endpoints
-
-#### Phase 3: Risk Scoring
-- [ ] Risk scoring logic
-- [ ] Contextual risk analysis
-- [ ] Temporal rolling assessment
-- [ ] Decision/recommendation engine
-
-#### Phase 4: Prevention & Response
-- [ ] Secondary verification challenges
-- [ ] Alert and notification system
-- [ ] Audit logging
-- [ ] Integration points for external systems
-
-#### Phase 5: Frontend
-- [ ] React UI
-- [ ] Real-time audio recording interface
-- [ ] Risk visualization dashboard
-- [ ] Admin/monitoring interface
-
-#### Phase 6: Deployment & Monitoring
-- [ ] Kubernetes manifests
-- [ ] Monitoring and alerting
-- [ ] Performance profiling
-- [ ] Documentation and runbooks
-
-## Tech Stack
-
-### Current
-- **Backend:** Python 3.9+, FastAPI, Uvicorn
-- **ML:** NumPy, SciPy
-- **Testing:** pytest, pytest-asyncio, pytest-cov
-- **DevOps:** Docker, Docker Compose
-
-### Planned
-- **ML/Audio:** PyTorch, librosa, torchaudio, scikit-learn
-- **Frontend:** React, TypeScript
-- **Database:** PostgreSQL (for persistence)
-- **Caching:** Redis (already in docker-compose.yml)
-- **Deployment:** Kubernetes
-- **Monitoring:** Prometheus, Grafana
-
-## Project Structure
-
+```text
+Audio file
+   ↓
+Waveform / format validation
+   ↓
+Mono conversion + resampling
+   ↓
+Normalization
+   ↓
+Fixed-duration crop / padding
+   ↓
+Log-Mel spectrogram
+   ↓
+PyTorch CNN
+   ↓
+Spoof probability
+   ↓
+Decision + risk score
 ```
+
+The repository also contains ASVspoof5 dataset utilities for protocol parsing, lazy audio-path resolution, label handling, and deterministic feature preparation.
+
+### Integrated model
+
+```text
+models_cache/audio_cnn_m4_stage2_5k.pt
+```
+
+## 📊 Detection Output
+
+Example API response:
+
+```json
+{
+  "decision": "SPOOF",
+  "spoof_probability": 0.9721,
+  "bonafide_probability": 0.0279,
+  "risk_score": 0.9721,
+  "model": "audio_cnn_m4_stage2_5k.pt"
+}
+```
+
+The frontend presents this as:
+
+- **Classification:** Synthetic / Human
+- **Confidence:** percentage for the selected class
+- **Risk:** Low / Medium / High / Critical
+- **Recommendation:** additional verification guidance
+
+> Model confidence is not certainty. Results should be treated as decision support, not proof of identity or fraud.
+
+## 🛠️ Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React, TypeScript, Vite |
+| Backend | Python, FastAPI, Uvicorn |
+| ML | PyTorch, NumPy, SciPy, audio feature extraction |
+| Dataset pipeline | ASVspoof5 utilities |
+| Testing | pytest, pytest-asyncio, pytest-cov |
+| Deployment | Docker, Render, Vercel |
+| Development | Git, GitHub, Python virtual environment |
+
+## 📁 Project Structure
+
+```text
 SIH26104/
-├── backend/                 # FastAPI application
+├── backend/
 │   ├── app/
-│   │   ├── api/            # API route handlers
-│   │   ├── core/           # Config and utilities
-│   │   ├── models/         # Pydantic schemas
-│   │   ├── services/       # Business logic
-│   │   └── main.py         # FastAPI app factory
-│   └── tests/              # Backend unit tests
-│
-├── ml/                     # ML pipeline and models
-│   ├── datasets/           # Dataset loaders
-│   ├── preprocessing/      # Audio feature extraction
-│   ├── models/             # Model definitions
-│   ├── inference/          # Real-time inference
-│   ├── evaluation/         # Benchmarking
-│   └── scripts/            # Training/utility scripts
-│
-├── frontend/               # React UI (TODO)
-│
-├── data/                   # Datasets and artifacts
-│   ├── raw/                # Original audio
-│   ├── processed/          # Processed features
-│   └── samples/            # Test samples
-│
-├── docs/                   # Documentation
-├── tests/                  # Integration tests
-├── .gitignore
-├── README.md               # This file
-├── requirements.txt        # Python dependencies
-├── pyproject.toml          # Project config
-├── setup.cfg               # Setup configuration
-└── docker-compose.yml      # Docker Compose config
+│   │   ├── core/              # Configuration
+│   │   └── main.py             # FastAPI application + API routes
+│   └── tests/                  # Backend tests
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx             # Main UI
+│   │   ├── services/            # Backend API integration
+│   │   ├── styles.css           # UI styling
+│   │   └── types.ts             # Frontend types
+│   ├── package.json
+│   └── vite.config.ts
+├── ml/
+│   ├── datasets/               # Dataset and ASVspoof utilities
+│   ├── evaluation/             # Metrics and evaluation
+│   ├── inference/              # CNN inference
+│   ├── models/                 # PyTorch model definitions
+│   ├── preprocessing/          # Audio preprocessing and features
+│   └── scripts/                # Training and evaluation scripts
+├── models_cache/               # Trained model artifacts
+├── tests/                      # ML/integration tests
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── pyproject.toml
+├── setup.cfg
+└── README.md
 ```
 
-## Getting Started
+## 🚀 Quick Start — Local Demo
+
+For a live SIH presentation, running the complete application locally is recommended. It avoids cold-start delays from a free cloud instance and can use the local machine's available compute resources.
 
 ### Prerequisites
-- Python 3.9 or higher
-- Docker and Docker Compose (optional)
+
+- Python 3.9+
+- Node.js and npm
 - Git
+- FFmpeg where required by the audio workflow
+- Optional: compatible NVIDIA GPU/PyTorch installation for faster inference
 
-### Local Development
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourorg/sih26104.git
-   cd SIH26104
-   ```
-
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Run tests:
-   ```bash
-   pytest
-   ```
-
-5. Start the backend API:
-   ```bash
-   python -m backend.app.main
-   ```
-   The API will be available at `http://localhost:8000`
-
-### Docker Development
+### 1. Clone
 
 ```bash
-docker-compose up
+git clone https://github.com/varun1132112251/SIH26104.git
+cd SIH26104
 ```
 
-This starts:
-- Backend API on port 8000
-- Redis on port 6379
+### 2. Create the Python environment
 
-## Configuration
+**Windows:**
 
-Configuration is managed via environment variables in `backend/app/core/config.py`. 
-
-Example `.env` file:
-```
-DEBUG=False
-API_PORT=8000
-API_HOST=0.0.0.0
-AUDIO_SAMPLE_RATE=16000
-LOG_LEVEL=INFO
-```
-
-## Testing
-
-Run all tests:
 ```bash
-pytest
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+**Linux/macOS:**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Install Python dependencies
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 4. Start the backend
+
+From the repository root:
+
+```bash
+python -m backend.app.main
+```
+
+Backend:
+
+```text
+http://localhost:8000
+```
+
+Health check:
+
+```text
+http://localhost:8000/health
+```
+
+### 5. Configure the frontend
+
+Create `frontend/.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_USE_MOCK_API=false
+VITE_DETECTION_ENDPOINT=/api/v1/predict
+```
+
+### 6. Start the frontend
+
+Open a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the Vite URL shown in the terminal, normally:
+
+```text
+http://localhost:5173
+```
+
+### 7. Run a detection
+
+1. Upload a supported audio file.
+2. Click **Analyze audio**.
+3. Wait for the backend to run the ML model.
+4. Review classification, confidence, risk, and recommendation.
+
+## 🐳 Docker
+
+Build and run the backend:
+
+```bash
+docker build -t v-shield-api .
+docker run -p 8000:8000 v-shield-api
+```
+
+Or run the development stack:
+
+```bash
+docker-compose up --build
+```
+
+## 🔌 API Reference
+
+### Health Check
+
+```http
+GET /health
+```
+
+Response:
+
+```json
+{
+  "status": "healthy",
+  "version": "0.1.0"
+}
+```
+
+### Audio Prediction
+
+```http
+POST /api/v1/predict
+Content-Type: multipart/form-data
+```
+
+Form field:
+
+```text
+file=<audio file>
+```
+
+Example:
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/predict" \
+  -F "file=@sample.wav"
+```
+
+Current API-supported extensions:
+
+```text
+.wav  .flac  .ogg  .aiff  .aif
+```
+
+## 🧪 Testing
+
+Run the integrated test suite:
+
+```bash
+python -m pytest --import-mode=importlib
 ```
 
 Run with coverage:
+
 ```bash
-pytest --cov=backend --cov=ml
+python -m pytest --import-mode=importlib --cov=backend --cov=ml
 ```
 
-Run specific test file:
-```bash
-pytest backend/tests/test_api.py
+## ☁️ Deployment
+
+The prototype supports a cloud deployment architecture of:
+
+```text
+Vercel (Frontend)
+       ↓
+Render (FastAPI Backend)
+       ↓
+PyTorch CNN Model
 ```
 
-## Contributing
+The deployed backend health endpoint is:
 
-1. Create a feature branch
-2. Make changes following the code style
-3. Add tests for new functionality
-4. Run tests and linting
-5. Submit a pull request
-
-## Code Style
-
-- **Formatting:** Black (line length: 100)
-- **Linting:** Flake8
-- **Type checking:** mypy
-- **Sorting:** isort
-
-Run code quality checks:
-```bash
-black .
-flake8 .
-mypy backend ml
+```text
+https://sih26104.onrender.com/health
 ```
 
-## Documentation
+For SIH judging, local execution is recommended when low latency is important because a free cloud instance can sleep after inactivity.
 
-Documentation will be generated using Sphinx. To build:
-```bash
-cd docs
-make html
-```
+## ⚠️ Current Prototype Limitations
 
-## License
+- Detection performance depends on training data, model quality, and recording conditions.
+- The API currently supports a defined set of audio formats; some browser recording formats may require conversion before submission.
+- A free cloud backend can experience cold-start latency after inactivity.
+- A spoof probability is not definitive proof of malicious intent.
+- Production deployments should restrict CORS to trusted frontend origins and add authentication, rate limiting, observability, and stronger request controls.
+- Persistent audit trails, external verification integrations, and production-grade monitoring are outside the current prototype scope.
 
-MIT License - See LICENSE file for details
+## 🔮 Future Enhancements
 
-## Contact
+- Stronger anti-spoofing architectures and model ensembles
+- Larger and more diverse training/evaluation datasets
+- Robustness testing across codecs, microphones, noise levels, and languages
+- Real-time streaming inference
+- Speaker verification combined with spoof detection
+- Context-aware risk scoring
+- Secondary verification workflows
+- Authentication and role-based access
+- Audit logging and monitoring
+- Model versioning and automated evaluation
+- Production-grade cloud scaling
 
-SIH26104 Team
+## 👥 Team
+
+**Smart India Hackathon — SIH26104**
+
+The prototype was developed collaboratively across ML, backend, frontend, testing, integration, and deployment workstreams.
+
+| Workstream | Primary responsibility |
+|---|---|
+| M1 | Backend/API and system integration |
+| M2 | Backend/data and supporting infrastructure |
+| M3 | Project support and integration |
+| M4 | Machine learning, training, evaluation, and inference |
+| M5 | Frontend and user experience |
+| M6 | Integration, testing, deployment, and presentation support |
+
+## 📌 Project Status
+
+**Status:** Functional SIH prototype  
+**Product:** V-SHIELD — Voice Deepfake Detection  
+**Primary branch:** `master`
+
+The repository contains the integrated frontend, FastAPI backend, ML inference pipeline, trained model artifact, tests, and Docker deployment configuration.
+
+## 📄 License
+
+This project is developed as an academic/hackathon prototype for **Smart India Hackathon (SIH)**.
+
+A formal open-source license can be added if the project is released publicly.
 
 ---
 
-**Last Updated:** 2024-09-02  
-**Status:** Alpha - Active Development
+<p align="center">
+  <strong>V-SHIELD</strong><br>
+  Voice Deepfake Detection for Safer Digital Communication
+</p>
