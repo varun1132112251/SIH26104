@@ -416,9 +416,9 @@ The repository contains the integrated frontend, FastAPI backend, ML inference p
 
 ## 📄 License
 
-This project is developed as an academic/hackathon prototype for **Smart India Hackathon (SIH)**.
+This project is licensed under the **MIT License**. See the [`LICENSE`](LICENSE) file for the complete license text.
 
-A formal open-source license can be added if the project is released publicly.
+The MIT License applies to the original project code. Third-party datasets, libraries, model components, and other external materials remain subject to their respective licenses and terms.
 
 ---
 
