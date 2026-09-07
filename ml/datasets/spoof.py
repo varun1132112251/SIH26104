@@ -69,6 +69,7 @@ class SpoofDataset(BaseAudioDataset):
             or row.get("file_id")
             or row.get("id")
             or row.get("path")
+            or row.get("audio_path")
         )
 
         label_value = (
