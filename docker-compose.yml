@@ -13,11 +13,13 @@ services:
       - API_PORT=8000
       - API_HOST=0.0.0.0
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MODEL_PATH=${MODEL_PATH:-}
+      # Model artifacts stay outside Git; override MODEL_PATH or mount MODEL_DIR as needed.
+      - MODEL_PATH=${MODEL_PATH:-/models/audio_cnn_m4_stage2_5k.pt}
       - AUDIO_SAMPLE_RATE=${AUDIO_SAMPLE_RATE:-16000}
     volumes:
       - ./backend:/app/backend
       - ./ml:/app/ml
+      - ${MODEL_DIR:-./models_cache}:/models:ro
     command: python -m backend.app.main
     networks:
       - sih26104-network
