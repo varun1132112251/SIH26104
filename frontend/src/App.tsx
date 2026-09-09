@@ -120,9 +120,23 @@ function App() {
       setRecordingSeconds(0)
       setIsRecording(true)
       setError('')
-    } catch {
-      setError('Microphone access was unavailable. Check browser permissions or upload an audio file.')
-    }
+        } catch (recordingError) {
+          console.error('Microphone error:', recordingError)
+
+          if (recordingError instanceof DOMException) {
+            if (recordingError.name === 'NotAllowedError') {
+              setError('Microphone permission was denied. Check Chrome site permissions and Windows microphone access.')
+            } else if (recordingError.name === 'NotFoundError') {
+              setError('No microphone was found. Connect or enable a microphone and try again.')
+            } else if (recordingError.name === 'NotReadableError') {
+              setError('The microphone is already being used by another application.')
+            } else {
+              setError(`Microphone error: ${recordingError.name}`)
+            }
+          } else {
+            setError('Microphone access failed. Check browser and Windows microphone settings.')
+          }
+        }
   }
 
   function stopRecording() {

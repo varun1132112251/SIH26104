@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 _SUPPORTED_AUDIO_SUFFIXES = {".wav", ".flac", ".ogg", ".aiff", ".aif"}
-_DEFAULT_CHECKPOINT = Path(__file__).resolve().parents[2] / "models_cache" / "audio_cnn_m4_stage2_5k.pt"
+_DEFAULT_CHECKPOINT = Path(__file__).resolve().parents[2] / "models_cache" / "audio_cnn.pt"
 
 
 @lru_cache(maxsize=1)

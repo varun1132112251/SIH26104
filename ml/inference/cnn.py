@@ -14,7 +14,7 @@ from ml.models.audio_cnn import AudioCNN
 from ml.preprocessing.audio import AudioProcessingError, AudioPreprocessor
 from ml.preprocessing.features import MelSpectrogramExtractor
 
-DEFAULT_THRESHOLD = 0.7404227
+DEFAULT_THRESHOLD = 0.80
 
 
 class CNNInferenceError(RuntimeError):
@@ -77,48 +77,109 @@ class CNNInference:
             raise CNNInferenceError(
                 f"Could not load CNN checkpoint '{self.checkpoint_path}': {exc}"
             ) from exc
-
     def _features(self, audio_path: str | Path) -> torch.Tensor:
         try:
             audio, _ = self.preprocessor.load_audio(audio_path)
+
             segment_samples = self.preprocessor.config.segment_samples
-            audio = np.pad(audio[:segment_samples], (0, max(segment_samples - audio.size, 0)))
-            features = self.extractor.extract(audio.astype(np.float32, copy=False))
+            hop_samples = self.preprocessor.config.hop_samples
+
+            if audio.size < segment_samples:
+                starts = [0]
+            else:
+                last_start = audio.size - segment_samples
+                starts = list(range(0, last_start + 1, hop_samples))
+                if starts[-1] != last_start:
+                    starts.append(last_start)
+
+            feature_tensors = []
+
             target_frames = self.extractor.expected_frames(segment_samples)
-            if features.shape[1] < target_frames:
-                features = np.pad(features, ((0, 0), (0, target_frames - features.shape[1])))
-            features = features[:, :target_frames]
-            tensor = torch.from_numpy(features[np.newaxis, np.newaxis, :].copy()).to(
-                device=self.device, dtype=torch.float32
-            )
-            if tuple(tensor.shape[1:]) != AudioCNN.input_shape:
-                raise CNNInferenceError(f"Unexpected feature shape: {tuple(tensor.shape[1:])}")
-            return tensor
+
+            for start in starts:
+                segment = audio[start:start + segment_samples]
+
+                if segment.size < segment_samples:
+                    segment = np.pad(
+                        segment,
+                        (0, segment_samples - segment.size),
+                        mode="constant",
+                    )
+
+                features = self.extractor.extract(
+                    segment.astype(np.float32, copy=False)
+                )
+
+                if features.shape[1] < target_frames:
+                    features = np.pad(
+                        features,
+                        ((0, 0), (0, target_frames - features.shape[1])),
+                    )
+
+                features = features[:, :target_frames]
+
+                tensor = torch.from_numpy(
+                    features[np.newaxis, np.newaxis, :].copy()
+                ).to(
+                    device=self.device,
+                    dtype=torch.float32,
+                )
+
+                feature_tensors.append(tensor)
+
+            batch = torch.cat(feature_tensors, dim=0)
+
+            if tuple(batch.shape[1:]) != AudioCNN.input_shape:
+                raise CNNInferenceError(
+                    f"Unexpected feature shape: {tuple(batch.shape[1:])}"
+                )
+
+            return batch
+
         except CNNInferenceError:
             raise
-        except (AudioProcessingError, FileNotFoundError, OSError, ValueError, TypeError) as exc:
-            raise CNNInferenceError(f"Could not process audio '{audio_path}': {exc}") from exc
+        except (
+            AudioProcessingError,
+            FileNotFoundError,
+            OSError,
+            ValueError,
+            TypeError,
+        ) as exc:
+            raise CNNInferenceError(
+                f"Could not process audio '{audio_path}': {exc}"
+            ) from exc
 
     def predict(self, audio_path: str | Path) -> CNNInferenceResult:
-        """Return probabilities, decision, and a normalized spoof risk score."""
+        """Run inference over the full recording using overlapping segments."""
         inputs = self._features(audio_path)
+
         try:
             with torch.inference_mode():
                 logits = self.model(inputs)
-                probabilities = torch.softmax(logits, dim=1)[0].detach().cpu().numpy()
+                probabilities = torch.softmax(logits, dim=1)
+                mean_probabilities = probabilities.mean(dim=0)
+                mean_probabilities = mean_probabilities.detach().cpu().numpy()
+
         except (RuntimeError, ValueError, TypeError) as exc:
-            raise CNNInferenceError(f"CNN inference failed for '{audio_path}': {exc}") from exc
-        if probabilities.shape != (2,) or not np.isfinite(probabilities).all():
+            raise CNNInferenceError(
+                f"CNN inference failed for '{audio_path}': {exc}"
+            ) from exc
+
+        if mean_probabilities.shape != (2,) or not np.isfinite(mean_probabilities).all():
             raise CNNInferenceError("CNN returned invalid probabilities.")
 
-        bonafide_probability = float(probabilities[0])
-        spoof_probability = float(probabilities[1])
+        bonafide_probability = float(mean_probabilities[0])
+        spoof_probability = float(mean_probabilities[1])
+
         return CNNInferenceResult(
             spoof_probability=spoof_probability,
             bonafide_probability=bonafide_probability,
-            decision="SPOOF" if spoof_probability >= DEFAULT_THRESHOLD  else "BONAFIDE",
+            decision=(
+                "SPOOF"
+                if spoof_probability >= DEFAULT_THRESHOLD
+                else "BONAFIDE"
+            ),
             risk_score=spoof_probability,
         )
-
 
 __all__ = ["CNNInference", "CNNInferenceError", "CNNInferenceResult"]
